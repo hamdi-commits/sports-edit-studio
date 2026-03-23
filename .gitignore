@@ -6,6 +6,8 @@ dist/
 
 # Runtime
 backend/uploads/*.mp4
+backend/uploads/test_*.jpg
+backend/assets/silence.mp3
 backend/tmp/
 *.log
 

@@ -20,16 +20,35 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { v4 as uuidv4 } from 'uuid'
 import { pipeline } from 'stream/promises'
+import { execSync } from 'child_process'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const UPLOADS_DIR = join(__dirname, '..', '..', 'uploads')
 const TMP_DIR     = join(__dirname, '..', '..', 'tmp')
 const MUSIC_DIR   = join(__dirname, '..', '..', 'assets', 'music')
+const ASSETS_DIR  = join(__dirname, '..', '..', 'assets')
 
 if (!existsSync(UPLOADS_DIR)) mkdirSync(UPLOADS_DIR, { recursive: true })
 if (!existsSync(TMP_DIR))     mkdirSync(TMP_DIR,     { recursive: true })
 
+const ffmpegBin = process.env.FFMPEG_PATH || 'ffmpeg'
 if (process.env.FFMPEG_PATH) ffmpeg.setFfmpegPath(process.env.FFMPEG_PATH)
+
+// Pre-generate a 120 s silent MP3 fallback (used when no music track file exists).
+// We call ffmpeg directly here to bypass fluent-ffmpeg's format capability check,
+// which incorrectly rejects the 'lavfi' virtual device on some static builds.
+const SILENT_AUDIO_PATH = join(ASSETS_DIR, 'silence.mp3')
+if (!existsSync(SILENT_AUDIO_PATH)) {
+  try {
+    execSync(
+      `"${ffmpegBin}" -f lavfi -i anullsrc=r=44100:cl=stereo -t 120 -c:a libmp3lame -q:a 9 "${SILENT_AUDIO_PATH}" -y`,
+      { stdio: 'ignore' }
+    )
+    console.log('Generated silence.mp3 fallback audio')
+  } catch (e) {
+    console.warn('Could not pre-generate silent audio:', e.message)
+  }
+}
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -156,7 +175,10 @@ function getClipDuration(effect) {
 
 function getMusicPath(musicId) {
   const path = join(MUSIC_DIR, `${musicId}.mp3`)
-  return existsSync(path) ? path : null
+  if (existsSync(path)) return path
+  // Fall back to pre-generated silence
+  if (existsSync(SILENT_AUDIO_PATH)) return SILENT_AUDIO_PATH
+  return null
 }
 
 // ─── Core render ─────────────────────────────────────────────────────────────
@@ -203,34 +225,36 @@ async function renderVideo(job) {
       cmd = cmd.input(imgPath)
     }
 
-    // Audio: real MP3 or silent lavfi track
+    // Audio: real MP3 or pre-generated silent MP3 fallback
     if (musicPath) {
       cmd = cmd.input(musicPath)
     } else {
-      // anullsrc generates a silent stereo track; -t limits duration
-      cmd = cmd
-        .input('anullsrc=r=44100:cl=stereo')
-        .inputOptions(['-f', 'lavfi', '-t', String(totalDuration)])
+      // No music file and silence.mp3 generation failed — skip audio mapping
+      console.warn('No audio source available, video will be muted')
     }
 
     const audioIdx = imagePaths.length  // audio is the last input
 
+    const filters = [filterGraph]
+    const outputOpts = [
+      '-map', '[outv]',
+      '-c:v', 'libx264',
+      '-preset', 'fast',
+      '-crf', '23',
+      '-movflags', '+faststart',
+      '-pix_fmt', 'yuv420p',
+    ]
+
+    if (musicPath) {
+      filters.push(`[${audioIdx}:a]atrim=0:${totalDuration},asetpts=PTS-STARTPTS[outa]`)
+      outputOpts.push('-map', '[outa]', '-c:a', 'aac', '-b:a', '192k')
+    } else {
+      outputOpts.push('-an')
+    }
+
     cmd
-      .complexFilter([
-        filterGraph,
-        `[${audioIdx}:a]atrim=0:${totalDuration},asetpts=PTS-STARTPTS[outa]`,
-      ])
-      .outputOptions([
-        '-map', '[outv]',
-        '-map', '[outa]',
-        '-c:v', 'libx264',
-        '-preset', 'fast',
-        '-crf', '23',
-        '-c:a', 'aac',
-        '-b:a', '192k',
-        '-movflags', '+faststart',
-        '-pix_fmt', 'yuv420p',
-      ])
+      .complexFilter(filters)
+      .outputOptions(outputOpts)
       .output(outputPath)
       .on('progress', (p) => {
         const pct = 45 + Math.round((p.percent || 0) * 0.5)
