@@ -32,8 +32,6 @@ export default async function searchRoute(app) {
       searchType: 'image',
       num,
       safe: 'active',
-      imgType: 'photo',
-      imgSize: 'large',
     }
     const apiUrl = `https://www.googleapis.com/customsearch/v1?${new URLSearchParams({ ...apiParams, key: '[REDACTED]', cx: '[REDACTED]' }).toString()}`
     console.log('[search] Calling Google CSE API:', apiUrl)
