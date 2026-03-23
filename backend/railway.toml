@@ -3,16 +3,14 @@ builder = "nixpacks"
 buildCommand = "npm install"
 
 [deploy]
-startCommand = "npm start"
+# Single-process mode: API + worker together (easiest for free tier)
+startCommand = "node src/workers/startWorker.js"
 healthcheckPath = "/health"
 healthcheckTimeout = 30
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
 
-[[services]]
-name = "api"
-startCommand = "npm start"
-
-[[services]]
-name = "worker"
-startCommand = "npm run worker"
+# To run API and worker as separate Railway services, create two services
+# and set their start commands to:
+#   Service 1 (api):    node src/index.js
+#   Service 2 (worker): node src/workers/renderWorker.js

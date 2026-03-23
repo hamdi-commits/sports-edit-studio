@@ -1,6 +1,15 @@
-// Entry point that starts both the API server and the render worker in one process.
-// Useful for Railway's single-dyno free tier.
-// For production, run them separately: npm start  +  npm run worker
+/**
+ * Combined entrypoint: runs API server + render worker in a single process.
+ * Handy for Railway's free tier (one dyno).
+ *
+ * For separation of concerns in production, use:
+ *   npm start   → API only
+ *   npm run worker → Worker only
+ */
 
+// Worker must be imported first so it registers before the server starts accepting jobs
 import './renderWorker.js'
-import '../index.js'
+
+// Slight delay then start API so worker Redis connection is established
+await new Promise((r) => setTimeout(r, 500))
+await import('../index.js')

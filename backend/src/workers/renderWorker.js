@@ -1,12 +1,12 @@
 /**
  * Render Worker — processes BullMQ jobs
  *
- * Each job: download images → apply FFmpeg effect → mux with music → upload/save
+ * Each job: download images → apply FFmpeg effect → mux with music → save MP4
  *
- * Effects implemented via FFmpeg filter_complex:
- *   ken_burns  — slow pan+zoom on each image (zoompan filter)
- *   zoom_burst — rapid zoom-in punch + speed-ramp
- *   flash_cut  — hard cuts with 2-frame white flash between clips
+ * Effects (all output 1080×1920 @ 30 fps H.264/AAC):
+ *   ken_burns  — slow pan+zoom via zoompan filter (3 s/clip)
+ *   zoom_burst — fast punch zoom via zoompan (2 s/clip)
+ *   flash_cut  — loop+trim with white fade-in flash (1.5 s/clip)
  */
 
 import 'dotenv/config'
@@ -15,7 +15,7 @@ import { connection } from '../lib/queue.js'
 import ffmpeg from 'fluent-ffmpeg'
 import axios from 'axios'
 import { createWriteStream, mkdirSync, existsSync } from 'fs'
-import { unlink, readdir, rm } from 'fs/promises'
+import { rm } from 'fs/promises'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { v4 as uuidv4 } from 'uuid'
@@ -29,7 +29,6 @@ const MUSIC_DIR   = join(__dirname, '..', '..', 'assets', 'music')
 if (!existsSync(UPLOADS_DIR)) mkdirSync(UPLOADS_DIR, { recursive: true })
 if (!existsSync(TMP_DIR))     mkdirSync(TMP_DIR,     { recursive: true })
 
-// Optional: point to a specific ffmpeg binary
 if (process.env.FFMPEG_PATH) ffmpeg.setFfmpegPath(process.env.FFMPEG_PATH)
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -44,115 +43,123 @@ function buildServerVideoUrl(filename) {
   return `${base}/uploads/${filename}`
 }
 
-// ─── FFmpeg effect builders ───────────────────────────────────────────────────
+// ─── FFmpeg effect filter builders ───────────────────────────────────────────
 
 /**
- * Ken Burns — slow zoom+pan.
- * Each image is 3 s at 30 fps → 90 frames.
- * zoompan: zoom from 1.0→1.3, panning slowly.
+ * Ken Burns — slow zoom+pan using zoompan filter.
+ * zoompan handles looping still images internally.
+ * 3 clips × 3 s = 9 s for 3 photos.
  */
 function buildKenBurnsFilter(imageCount) {
   const fps = 30
-  const duration = 3       // seconds per clip
-  const frames = fps * duration
+  const clipDuration = 3
+  const frames = fps * clipDuration
+
+  // Three pan destinations cycling across clips
+  const panVariants = [
+    `x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`,   // center zoom
+    `x='0':y='0'`,                                    // top-left corner
+    `x='iw-(iw/zoom)':y='ih-(ih/zoom)'`,             // bottom-right corner
+  ]
 
   const parts = []
   for (let i = 0; i < imageCount; i++) {
-    // Alternate between top-left, center, bottom-right pans
-    const panVariants = [
-      `x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`,              // center
-      `x='0':y='0'`,                                              // top-left
-      `x='iw-(iw/zoom)':y='ih-(ih/zoom)'`,                       // bottom-right
-    ]
     const pan = panVariants[i % panVariants.length]
-
     parts.push(
-      `[${i}:v]scale=1080:1920:force_original_aspect_ratio=increase,` +
-      `crop=1080:1920,` +
+      `[${i}:v]` +
+      `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,` +
       `zoompan=z='min(zoom+0.002,1.3)':${pan}:d=${frames}:s=1080x1920:fps=${fps},` +
-      `setpts=PTS-STARTPTS[v${i}]`
+      `setpts=PTS-STARTPTS` +
+      `[v${i}]`
     )
   }
 
-  const inputs = Array.from({ length: imageCount }, (_, i) => `[v${i}]`).join('')
-  const filter = [...parts, `${inputs}concat=n=${imageCount}:v=1:a=0[outv]`].join(';')
-  return filter
+  const concat = Array.from({ length: imageCount }, (_, i) => `[v${i}]`).join('')
+  return [...parts, `${concat}concat=n=${imageCount}:v=1:a=0[outv]`].join(';')
 }
 
 /**
- * Zoom Burst — quick zoom-in punch (scale from 1× to 1.5× over 0.5 s) then hold for 1.5 s.
- * Uses scale2ref + overlay trick; simpler: zoompan with fast zoom.
+ * Zoom Burst — zoompan with fast initial zoom from 1.0→1.5 over 0.5 s.
+ * 2 s/clip total.
  */
 function buildZoomBurstFilter(imageCount) {
   const fps = 30
-  const totalFrames = fps * 2     // 2 s per clip
-  const burstFrames = fps * 0.5   // 0.5 s zoom burst
+  const clipDuration = 2
+  const totalFrames = fps * clipDuration
+  const burstFrames = fps * 0.5  // 15 frames
 
   const parts = []
   for (let i = 0; i < imageCount; i++) {
     parts.push(
-      `[${i}:v]scale=1080:1920:force_original_aspect_ratio=increase,` +
-      `crop=1080:1920,` +
+      `[${i}:v]` +
+      `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,` +
       `zoompan=z='if(lte(on,${burstFrames}),1+0.5*(on/${burstFrames}),1.5)':` +
       `x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':` +
       `d=${totalFrames}:s=1080x1920:fps=${fps},` +
-      `setpts=PTS-STARTPTS[v${i}]`
+      `setpts=PTS-STARTPTS` +
+      `[v${i}]`
     )
   }
 
-  const inputs = Array.from({ length: imageCount }, (_, i) => `[v${i}]`).join('')
-  const filter = [...parts, `${inputs}concat=n=${imageCount}:v=1:a=0[outv]`].join(';')
-  return filter
+  const concat = Array.from({ length: imageCount }, (_, i) => `[v${i}]`).join('')
+  return [...parts, `${concat}concat=n=${imageCount}:v=1:a=0[outv]`].join(';')
 }
 
 /**
- * Flash Cut — 1.5 s per clip with a 4-frame white flash at the cut point.
- * White flash = overlay a white rectangle with fade-out using fade filter.
+ * Flash Cut — hard cuts with a white flash at the start of each clip.
+ *
+ * Still images have no native duration, so we use:
+ *   loop=loop=-1:size=1  → loops the single frame indefinitely
+ *   trim=duration=X      → limits to clip length
+ *   fps=fps=30           → forces output frame rate
+ *   fade=in white        → white flash for first 4 frames
+ *
+ * 1.5 s/clip.
  */
 function buildFlashCutFilter(imageCount) {
   const fps = 30
-  const clipFrames = fps * 1.5    // 1.5 s per clip
-  const flashDuration = 4         // frames
+  const clipDuration = 1.5
+  const flashDuration = 4 / fps  // 4 frames ≈ 0.133 s
 
   const parts = []
   for (let i = 0; i < imageCount; i++) {
     parts.push(
-      `[${i}:v]scale=1080:1920:force_original_aspect_ratio=increase,` +
-      `crop=1080:1920,` +
-      // flash-in at start
-      `fade=t=in:st=0:d=${flashDuration / fps}:color=white,` +
-      `trim=duration=${clipFrames / fps},` +
-      `setpts=PTS-STARTPTS[v${i}]`
+      `[${i}:v]` +
+      `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,` +
+      // loop the still image forever, then trim to clip length
+      `loop=loop=-1:size=1:start=0,` +
+      `trim=duration=${clipDuration},` +
+      `fps=fps=${fps},` +
+      `fade=t=in:st=0:d=${flashDuration}:color=white,` +
+      `setpts=PTS-STARTPTS` +
+      `[v${i}]`
     )
   }
 
-  const inputs = Array.from({ length: imageCount }, (_, i) => `[v${i}]`).join('')
-  const filter = [...parts, `${inputs}concat=n=${imageCount}:v=1:a=0[outv]`].join(';')
-  return filter
+  const concat = Array.from({ length: imageCount }, (_, i) => `[v${i}]`).join('')
+  return [...parts, `${concat}concat=n=${imageCount}:v=1:a=0[outv]`].join(';')
 }
 
 function getFilterBuilder(effect) {
-  if (effect === 'zoom_burst')  return buildZoomBurstFilter
-  if (effect === 'flash_cut')   return buildFlashCutFilter
-  return buildKenBurnsFilter   // default
+  if (effect === 'zoom_burst') return buildZoomBurstFilter
+  if (effect === 'flash_cut')  return buildFlashCutFilter
+  return buildKenBurnsFilter
 }
 
 function getClipDuration(effect) {
-  if (effect === 'zoom_burst')  return 2
-  if (effect === 'flash_cut')   return 1.5
+  if (effect === 'zoom_burst') return 2
+  if (effect === 'flash_cut')  return 1.5
   return 3  // ken_burns
 }
 
-// ─── Music helper ─────────────────────────────────────────────────────────────
+// ─── Music ───────────────────────────────────────────────────────────────────
 
 function getMusicPath(musicId) {
-  const musicFile = join(MUSIC_DIR, `${musicId}.mp3`)
-  if (existsSync(musicFile)) return musicFile
-  // Fallback: generate a silent audio file on the fly
-  return null
+  const path = join(MUSIC_DIR, `${musicId}.mp3`)
+  return existsSync(path) ? path : null
 }
 
-// ─── Core render function ─────────────────────────────────────────────────────
+// ─── Core render ─────────────────────────────────────────────────────────────
 
 async function renderVideo(job) {
   const { photos, effect, music } = job.data
@@ -161,61 +168,68 @@ async function renderVideo(job) {
 
   await job.updateProgress(5)
 
-  // 1. Download all images
-  const imagePaths = []
-  for (let i = 0; i < photos.length; i++) {
-    const dest = join(jobTmpDir, `img_${i}.jpg`)
-    await downloadImage(photos[i], dest)
-    imagePaths.push(dest)
-    await job.updateProgress(5 + Math.round((i + 1) / photos.length * 35))
+  // 1. Download images in parallel (max 4 at a time)
+  const imagePaths = Array.from({ length: photos.length }, (_, i) =>
+    join(jobTmpDir, `img_${i}.jpg`)
+  )
+
+  const CHUNK = 4
+  for (let start = 0; start < photos.length; start += CHUNK) {
+    await Promise.all(
+      photos.slice(start, start + CHUNK).map((url, j) =>
+        downloadImage(url, imagePaths[start + j])
+      )
+    )
+    await job.updateProgress(5 + Math.round(((start + CHUNK) / photos.length) * 35))
   }
 
   await job.updateProgress(40)
 
-  // 2. Build FFmpeg command
-  const outputFilename = `${uuidv4()}.mp4`
-  const outputPath = join(UPLOADS_DIR, outputFilename)
-  const filterBuilder = getFilterBuilder(effect)
-  const filterGraph = filterBuilder(imagePaths.length)
-  const musicPath = getMusicPath(music)
+  // 2. Build render params
+  const filterGraph   = getFilterBuilder(effect)(imagePaths.length)
   const totalDuration = imagePaths.length * getClipDuration(effect)
+  const musicPath     = getMusicPath(music)
+  const outputFilename = `${uuidv4()}.mp4`
+  const outputPath     = join(UPLOADS_DIR, outputFilename)
 
   await job.updateProgress(45)
 
+  // 3. Run FFmpeg
   await new Promise((resolve, reject) => {
     let cmd = ffmpeg()
 
-    // Add all image inputs
+    // Image inputs (still JPEGs — effects handle looping/duration)
     for (const imgPath of imagePaths) {
       cmd = cmd.input(imgPath)
     }
 
-    // Add music input (or generate silence)
+    // Audio: real MP3 or silent lavfi track
     if (musicPath) {
       cmd = cmd.input(musicPath)
     } else {
-      // Generate silent audio: use lavfi source
-      cmd = cmd.input(`aevalsrc=0:c=stereo:s=44100:d=${totalDuration}`).inputOption('-f lavfi')
+      // anullsrc generates a silent stereo track; -t limits duration
+      cmd = cmd
+        .input('anullsrc=r=44100:cl=stereo')
+        .inputOptions(['-f', 'lavfi', '-t', String(totalDuration)])
     }
 
-    const audioInputIndex = imagePaths.length
+    const audioIdx = imagePaths.length  // audio is the last input
 
     cmd
       .complexFilter([
         filterGraph,
-        // Mix/trim audio to match video length
-        `[${audioInputIndex}:a]atrim=0:${totalDuration},asetpts=PTS-STARTPTS[outa]`
+        `[${audioIdx}:a]atrim=0:${totalDuration},asetpts=PTS-STARTPTS[outa]`,
       ])
       .outputOptions([
-        '-map [outv]',
-        '-map [outa]',
-        '-c:v libx264',
-        '-preset fast',
-        '-crf 23',
-        '-c:a aac',
-        '-b:a 192k',
-        '-movflags +faststart',
-        '-pix_fmt yuv420p',
+        '-map', '[outv]',
+        '-map', '[outa]',
+        '-c:v', 'libx264',
+        '-preset', 'fast',
+        '-crf', '23',
+        '-c:a', 'aac',
+        '-b:a', '192k',
+        '-movflags', '+faststart',
+        '-pix_fmt', 'yuv420p',
       ])
       .output(outputPath)
       .on('progress', (p) => {
@@ -223,21 +237,27 @@ async function renderVideo(job) {
         job.updateProgress(Math.min(pct, 95))
       })
       .on('end', resolve)
-      .on('error', reject)
+      .on('error', (err, stdout, stderr) => {
+        console.error('[ffmpeg stderr]', stderr)
+        reject(err)
+      })
       .run()
   })
 
   await job.updateProgress(95)
 
-  // 3. Clean up tmp dir
+  // 4. Clean up temp files
   await rm(jobTmpDir, { recursive: true, force: true })
 
   await job.updateProgress(100)
 
-  return { videoUrl: buildServerVideoUrl(outputFilename), filename: outputFilename }
+  return {
+    videoUrl: buildServerVideoUrl(outputFilename),
+    filename: outputFilename,
+  }
 }
 
-// ─── Worker ──────────────────────────────────────────────────────────────────
+// ─── Worker process ──────────────────────────────────────────────────────────
 
 const worker = new Worker('render', renderVideo, {
   connection,
@@ -245,7 +265,7 @@ const worker = new Worker('render', renderVideo, {
 })
 
 worker.on('completed', (job, result) => {
-  console.log(`✅ Job ${job.id} completed → ${result.videoUrl}`)
+  console.log(`✅ Job ${job.id} done → ${result.videoUrl}`)
 })
 
 worker.on('failed', (job, err) => {
@@ -253,7 +273,7 @@ worker.on('failed', (job, err) => {
 })
 
 worker.on('progress', (job, progress) => {
-  console.log(`📊 Job ${job.id} progress: ${progress}%`)
+  console.log(`📊 Job ${job.id}: ${progress}%`)
 })
 
-console.log('🎬 Render worker started')
+console.log('🎬 Render worker started (concurrency=2)')
