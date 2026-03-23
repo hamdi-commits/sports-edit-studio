@@ -40,7 +40,7 @@ const SILENT_AUDIO_PATH = join(ASSETS_DIR, 'silence.mp3')
 if (!existsSync(SILENT_AUDIO_PATH)) {
   try {
     execSync(
-      `"${ffmpegBin}" -f lavfi -i anullsrc=r=44100:cl=stereo -t 120 -c:a libmp3lame -q:a 9 "${SILENT_AUDIO_PATH}" -y`,
+      `"${ffmpegBin}" -f lavfi -i anullsrc=r=44100:cl=stereo -t 120 -c:a libmp3lame -q:a 9 "${toFfmpegPath(SILENT_AUDIO_PATH)}" -y`,
       { stdio: 'ignore' }
     )
     console.log('Generated silence.mp3 fallback audio')
@@ -50,6 +50,10 @@ if (!existsSync(SILENT_AUDIO_PATH)) {
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
+
+// Windows path.join uses backslashes; FFmpeg (MinGW/MSYS2 builds) expects
+// forward slashes. Normalize any path before handing it to FFmpeg.
+const toFfmpegPath = (p) => p.replace(/\\/g, '/')
 
 async function downloadImage(url, destPath) {
   const resp = await axios.get(url, { responseType: 'stream', timeout: 15000 })
@@ -221,12 +225,12 @@ async function renderVideo(job) {
 
     // Image inputs (still JPEGs — effects handle looping/duration)
     for (const imgPath of imagePaths) {
-      cmd = cmd.input(imgPath)
+      cmd = cmd.input(toFfmpegPath(imgPath))
     }
 
     // Audio: real MP3 or pre-generated silent MP3 fallback
     if (musicPath) {
-      cmd = cmd.input(musicPath)
+      cmd = cmd.input(toFfmpegPath(musicPath))
     } else {
       // No music file and silence.mp3 generation failed — skip audio mapping
       console.warn('No audio source available, video will be muted')
@@ -254,7 +258,7 @@ async function renderVideo(job) {
     cmd
       .complexFilter(filters)
       .outputOptions(outputOpts)
-      .output(outputPath)
+      .output(toFfmpegPath(outputPath))
       .on('progress', (p) => {
         const pct = 45 + Math.round((p.percent || 0) * 0.5)
         job.updateProgress(Math.min(pct, 95))
