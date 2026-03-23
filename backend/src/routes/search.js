@@ -32,7 +32,7 @@ export default async function searchRoute(app) {
       searchType: 'image',
       num,
       safe: 'active',
-      imgType: 'action',
+      imgType: 'photo',
       imgSize: 'large',
     }
     const apiUrl = `https://www.googleapis.com/customsearch/v1?${new URLSearchParams({ ...apiParams, key: '[REDACTED]', cx: '[REDACTED]' }).toString()}`
