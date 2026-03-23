@@ -10,8 +10,7 @@
  */
 
 import 'dotenv/config'
-import { Worker } from 'bullmq'
-import { connection } from '../lib/queue.js'
+import { redis, QUEUE_KEY, makeJob } from '../lib/queue.js'
 import ffmpeg from 'fluent-ffmpeg'
 import axios from 'axios'
 import { createWriteStream, mkdirSync, existsSync } from 'fs'
@@ -281,23 +280,62 @@ async function renderVideo(job) {
   }
 }
 
-// ─── Worker process ──────────────────────────────────────────────────────────
+// ─── Worker process (polling) ─────────────────────────────────────────────────
 
-const worker = new Worker('render', renderVideo, {
-  connection,
-  concurrency: 2,
-})
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-worker.on('completed', (job, result) => {
-  console.log(`✅ Job ${job.id} done → ${result.videoUrl}`)
-})
+async function processOne() {
+  const jobId = await redis.lpop(QUEUE_KEY)
+  if (!jobId) return false
 
-worker.on('failed', (job, err) => {
-  console.error(`❌ Job ${job?.id} failed:`, err.message)
-})
+  let stored
+  try {
+    stored = await redis.hgetall(`job:${jobId}`)
+  } catch (err) {
+    console.error(`Failed to fetch job ${jobId}:`, err.message)
+    return true
+  }
 
-worker.on('progress', (job, progress) => {
-  console.log(`📊 Job ${job.id}: ${progress}%`)
-})
+  if (!stored || !stored.data) return true
 
-console.log('🎬 Render worker started (concurrency=2)')
+  await redis.hset(`job:${jobId}`, { status: 'active' })
+  stored.status = 'active'
+
+  let data
+  try { data = JSON.parse(stored.data) } catch { data = {} }
+
+  const job = makeJob(jobId, data, stored)
+
+  try {
+    const result = await renderVideo(job)
+    await redis.hset(`job:${jobId}`, {
+      status: 'completed',
+      progress: 100,
+      returnvalue: JSON.stringify(result),
+    })
+    console.log(`✅ Job ${jobId} done → ${result.videoUrl}`)
+  } catch (err) {
+    await redis.hset(`job:${jobId}`, {
+      status: 'failed',
+      failedReason: err.message,
+    })
+    console.error(`❌ Job ${jobId} failed:`, err.message)
+  }
+
+  return true
+}
+
+async function poll() {
+  console.log('🎬 Render worker started (polling Upstash Redis)')
+  while (true) {
+    try {
+      const didWork = await processOne()
+      if (!didWork) await sleep(2000)
+    } catch (err) {
+      console.error('Worker poll error:', err.message)
+      await sleep(5000)
+    }
+  }
+}
+
+poll()
