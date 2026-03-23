@@ -54,8 +54,8 @@ export default async function searchRoute(app) {
 function getMockImages(q) {
   const colors = ['7c3aed', 'ec4899', 'fbbf24', '06b6d4', '10b981']
   return Array.from({ length: 12 }, (_, i) => ({
-    url: `https://placehold.co/400x400/${colors[i % colors.length]}/white?text=${encodeURIComponent(q)}+${i + 1}`,
-    thumbnail: `https://placehold.co/200x200/${colors[i % colors.length]}/white?text=${encodeURIComponent(q)}+${i + 1}`,
+    url: `https://placehold.co/400x400/${colors[i % colors.length]}/white.png?text=${encodeURIComponent(q)}+${i + 1}`,
+    thumbnail: `https://placehold.co/200x200/${colors[i % colors.length]}/white.png?text=${encodeURIComponent(q)}+${i + 1}`,
     title: `${q} photo ${i + 1}`,
   }))
 }
