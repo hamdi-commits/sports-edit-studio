@@ -302,7 +302,7 @@ async function processOne() {
   stored.status = 'active'
 
   let data
-  try { data = JSON.parse(stored.data) } catch { data = {} }
+  try { data = typeof stored.data === 'string' ? JSON.parse(stored.data) : (stored.data ?? {}) } catch { data = {} }
 
   const job = makeJob(jobId, data, stored)
 

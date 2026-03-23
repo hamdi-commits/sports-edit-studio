@@ -20,6 +20,7 @@ export function makeJob(id, data, stored = {}) {
     get progress() { return Number(stored.progress ?? 0) },
     get returnvalue() {
       if (!stored.returnvalue) return null
+      if (typeof stored.returnvalue !== 'string') return stored.returnvalue
       try { return JSON.parse(stored.returnvalue) } catch { return null }
     },
     get failedReason() { return stored.failedReason || null },
@@ -48,7 +49,7 @@ export const renderQueue = {
     const stored = await redis.hgetall(`job:${jobId}`)
     if (!stored || !stored.data) return null
     let data
-    try { data = JSON.parse(stored.data) } catch { data = {} }
+    try { data = typeof stored.data === 'string' ? JSON.parse(stored.data) : (stored.data ?? {}) } catch { data = {} }
     return makeJob(jobId, data, stored)
   },
 }
