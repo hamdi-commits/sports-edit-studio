@@ -141,7 +141,7 @@ function buildSingleClipFilter(index, effect, dur) {
         `${base},fps=${fps},` +
         `zoompan=z='min(zoom+0.002,1.3)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':` +
         `d=${frames}:s=1080x1920:fps=${fps},` +
-        `rotate=angle=0.05:expand=0:fillcolor=black,` +
+        `rotate=angle=0.05:fillcolor=black,` +
         `${tail}`
       )
 
