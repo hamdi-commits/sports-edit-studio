@@ -27,38 +27,40 @@ export default function VideoPreview() {
     setTimeout(() => setToast(''), 2500)
   }
 
+  function triggerAnchorDownload() {
+    const a = document.createElement('a')
+    a.href = videoUrl
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  }
+
   async function handleDownload() {
     if (saving) return
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+
+    if (!isMobile) {
+      // Desktop: direct anchor click → browser native Save As dialog
+      triggerAnchorDownload()
+      showToast('Video kaydedildi!')
+      return
+    }
+
+    // Mobile: fetch blob → navigator.share with File
     setSaving(true)
     try {
-      // Fetch the video as a blob so we can pass a real File to navigator.share
-      // and also get a proper blob URL for the anchor download fallback.
       const resp = await fetch(videoUrl)
       if (!resp.ok) throw new Error('fetch failed')
       const blob = await resp.blob()
       const file = new File([blob], filename, { type: 'video/mp4' })
-
-      // Mobile path: Web Share API with file (shows native share sheet / Save to Files)
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: suggestedTitle })
-        showToast('Video kaydedildi!')
-        return
-      }
-
-      // Desktop path: anchor with download attribute → triggers Save As dialog
-      const blobUrl = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = blobUrl
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000)
+      await navigator.share({ files: [file], title: suggestedTitle })
       showToast('Video kaydedildi!')
     } catch (err) {
-      // Both paths failed (e.g. share cancelled counts as AbortError — don't show error)
-      if (err?.name === 'AbortError') return
-      alert('Videoya uzun bas → Farklı Kaydet seçeneğini kullan')
+      if (err?.name === 'AbortError') return   // user dismissed share sheet
+      // Share failed → fall back to anchor download
+      triggerAnchorDownload()
+      showToast('Video kaydedildi!')
     } finally {
       setSaving(false)
     }
