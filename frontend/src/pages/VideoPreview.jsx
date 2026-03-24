@@ -6,22 +6,62 @@ export default function VideoPreview() {
   const navigate = useNavigate()
   const { videoUrl, athleteName, reset } = useAppStore()
   const [copied, setCopied] = useState(false)
+  const [toast, setToast] = useState('')
+  const [saving, setSaving] = useState(false)
 
   if (!videoUrl) {
     navigate('/')
     return null
   }
 
-  const year = new Date().getFullYear()
+  const today = new Date().toISOString().slice(0, 10)           // "2026-03-24"
+  const year = today.slice(0, 4)
   const safeAthlete = athleteName || 'Sporcu'
+  const safeSlug = safeAthlete.replace(/\s+/g, '_').toLowerCase()
+  const filename = `${safeSlug}-edit-${today}.mp4`
   const suggestedTitle = `${safeAthlete} - Epic Sports Edit 🔥 | ${year}`
   const suggestedTags = `#${safeAthlete.replace(/\s+/g, '')} #SportsEdit #Highlights #Football #Sports #Edit`
 
-  function handleDownload() {
-    const a = document.createElement('a')
-    a.href = videoUrl
-    a.download = `${safeAthlete.replace(/\s+/g, '_')}-edit.mp4`
-    a.click()
+  function showToast(msg) {
+    setToast(msg)
+    setTimeout(() => setToast(''), 2500)
+  }
+
+  async function handleDownload() {
+    if (saving) return
+    setSaving(true)
+    try {
+      // Fetch the video as a blob so we can pass a real File to navigator.share
+      // and also get a proper blob URL for the anchor download fallback.
+      const resp = await fetch(videoUrl)
+      if (!resp.ok) throw new Error('fetch failed')
+      const blob = await resp.blob()
+      const file = new File([blob], filename, { type: 'video/mp4' })
+
+      // Mobile path: Web Share API with file (shows native share sheet / Save to Files)
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: suggestedTitle })
+        showToast('Video kaydedildi!')
+        return
+      }
+
+      // Desktop path: anchor with download attribute → triggers Save As dialog
+      const blobUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = blobUrl
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000)
+      showToast('Video kaydedildi!')
+    } catch (err) {
+      // Both paths failed (e.g. share cancelled counts as AbortError — don't show error)
+      if (err?.name === 'AbortError') return
+      alert('Videoya uzun bas → Farklı Kaydet seçeneğini kullan')
+    } finally {
+      setSaving(false)
+    }
   }
 
   function handleShare() {
@@ -57,6 +97,18 @@ export default function VideoPreview() {
 
   return (
     <div className="flex flex-col min-h-screen bg-bg">
+      {/* Toast */}
+      {toast && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl
+                        font-black text-sm pointer-events-none"
+             style={{ background: 'rgba(0,255,135,0.15)', color: '#00ff87',
+                      border: '1px solid rgba(0,255,135,0.4)',
+                      boxShadow: '0 0 20px rgba(0,255,135,0.3)',
+                      backdropFilter: 'blur(12px)' }}>
+          ✓ {toast}
+        </div>
+      )}
+
       {/* Header */}
       <div className="px-4 pt-12 pb-4 sticky top-0 z-10"
            style={{ background: 'rgba(8,8,24,0.95)', backdropFilter: 'blur(12px)',
@@ -88,12 +140,13 @@ export default function VideoPreview() {
         <div className="flex gap-3">
           <button
             onClick={handleDownload}
-            className="flex-1 py-4 rounded-2xl font-black text-base active:scale-95 transition-all"
+            disabled={saving}
+            className="flex-1 py-4 rounded-2xl font-black text-base active:scale-95 transition-all disabled:opacity-60"
             style={{ background: 'linear-gradient(135deg, #00ff87, #00c8ff)',
                      color: '#080818',
-                     boxShadow: '0 0 20px rgba(0,255,135,0.4)' }}
+                     boxShadow: saving ? 'none' : '0 0 20px rgba(0,255,135,0.4)' }}
           >
-            ⬇️ Kaydet
+            {saving ? '⏳ Hazırlanıyor...' : '⬇️ Kaydet'}
           </button>
           <button
             onClick={handleShare}
