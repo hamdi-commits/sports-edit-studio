@@ -19,15 +19,16 @@ export default async function renderRoute(app) {
             maxItems: 20,
             items: {},   // Accept both strings and objects — validated in handler
           },
-          effect: { type: 'string' },   // optional global fallback (legacy)
-          music:  { type: 'string' },
+          effect:   { type: 'string' },   // optional global fallback (legacy)
+          music:    { type: 'string' },
+          musicUrl: { type: 'string' },  // CDN URL — downloaded by worker
         },
       },
     },
   }, async (req, reply) => {
-    const { photos, effect, music } = req.body
+    const { photos, effect, music, musicUrl } = req.body
 
-    const job = await renderQueue.add('render', { photos, effect, music }, {
+    const job = await renderQueue.add('render', { photos, effect, music, musicUrl }, {
       attempts: 2,
       backoff: { type: 'exponential', delay: 3000 },
     })

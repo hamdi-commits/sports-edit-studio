@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import searchRoute from './routes/search.js'
 import renderRoute from './routes/render.js'
+import hashtagsRoute from './routes/hashtags.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -23,6 +24,7 @@ await app.register(staticFiles, {
 
 await app.register(searchRoute)
 await app.register(renderRoute)
+await app.register(hashtagsRoute)
 
 app.get('/health', async () => ({ ok: true, ts: Date.now() }))
 

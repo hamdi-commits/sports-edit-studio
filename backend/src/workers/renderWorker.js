@@ -237,18 +237,40 @@ function buildPerPhotoFilterGraph(items) {
 
 // ─── Music ───────────────────────────────────────────────────────────────────
 
-function getMusicPath(musicId) {
-  const path = join(MUSIC_DIR, `${musicId}.mp3`)
-  if (existsSync(path)) return path
-  // Fall back to pre-generated silence
+/**
+ * Resolve music to a local path.
+ * - If musicUrl is provided (e.g. a CDN URL), download it to tmp and return that path.
+ * - Otherwise fall back to local MUSIC_DIR by musicId.
+ * - If nothing found, use pre-generated silence.
+ */
+async function resolveMusicPath(musicId, musicUrl, tmpDir) {
+  // 1. Download from URL if provided
+  if (musicUrl) {
+    const tmpPath = join(tmpDir, 'music.mp3')
+    try {
+      await downloadImage(musicUrl, tmpPath)  // same stream-download helper
+      return tmpPath
+    } catch (err) {
+      console.warn(`[render] Failed to download musicUrl (${err.message}), trying local fallback`)
+    }
+  }
+
+  // 2. Local file by musicId
+  if (musicId) {
+    const localPath = join(MUSIC_DIR, `${musicId}.mp3`)
+    if (existsSync(localPath)) return localPath
+  }
+
+  // 3. Silent fallback
   if (existsSync(SILENT_AUDIO_PATH)) return SILENT_AUDIO_PATH
+
   return null
 }
 
 // ─── Core render ─────────────────────────────────────────────────────────────
 
 async function renderVideo(job) {
-  const { photos, effect: globalEffect, music } = job.data
+  const { photos, effect: globalEffect, music, musicUrl } = job.data
   const jobTmpDir = join(TMP_DIR, job.id)
   mkdirSync(jobTmpDir, { recursive: true })
 
@@ -288,9 +310,9 @@ async function renderVideo(job) {
   await job.updateProgress(40)
 
   // 2. Build render params
-  const filterGraph   = buildPerPhotoFilterGraph(successItems)
-  const totalDuration = successItems.reduce((s, item) => s + item.duration, 0)
-  const musicPath     = getMusicPath(music)
+  const filterGraph    = buildPerPhotoFilterGraph(successItems)
+  const totalDuration  = successItems.reduce((s, item) => s + item.duration, 0)
+  const musicPath      = await resolveMusicPath(music, musicUrl, jobTmpDir)
   const outputFilename = `${uuidv4()}.mp4`
   const outputPath     = join(UPLOADS_DIR, outputFilename)
 

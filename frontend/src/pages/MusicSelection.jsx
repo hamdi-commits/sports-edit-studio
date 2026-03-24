@@ -11,46 +11,51 @@ const MOODS = [
   { key: 'FUNNY',     label: 'KOMİK',     color: '#00ff87' },
 ]
 
+// Free royalty-free music — SoundHelix sample tracks.
+// Replace urls with Pixabay CDN links (https://cdn.pixabay.com/audio/…)
+// once you have API access or have downloaded specific tracks.
+const BASE = 'https://www.soundhelix.com/examples/mp3'
+
 const MUSIC_LIBRARY = {
   HYPE: [
-    { id: 'hype_trap',    name: 'Trap Beast',   emoji: '🔥', bpm: 155 },
-    { id: 'hype_bounce',  name: 'Bounce Zone',  emoji: '⚡', bpm: 145 },
-    { id: 'hype_rage',    name: 'Rage Mode',    emoji: '😤', bpm: 160 },
-    { id: 'hype_drill',   name: 'UK Drill',     emoji: '🎯', bpm: 140 },
-    { id: 'hype_phonk',   name: 'Phonk Rider',  emoji: '🏎️', bpm: 135 },
-    { id: 'hype_jersey',  name: 'Jersey Club',  emoji: '💃', bpm: 150 },
+    { id: 'hype_trap',    name: 'Trap Beast',   emoji: '🔥', bpm: 155, url: `${BASE}/SoundHelix-Song-1.mp3` },
+    { id: 'hype_bounce',  name: 'Bounce Zone',  emoji: '⚡', bpm: 145, url: `${BASE}/SoundHelix-Song-2.mp3` },
+    { id: 'hype_rage',    name: 'Rage Mode',    emoji: '😤', bpm: 160, url: `${BASE}/SoundHelix-Song-3.mp3` },
+    { id: 'hype_drill',   name: 'UK Drill',     emoji: '🎯', bpm: 140, url: `${BASE}/SoundHelix-Song-4.mp3` },
+    { id: 'hype_phonk',   name: 'Phonk Rider',  emoji: '🏎️', bpm: 135, url: `${BASE}/SoundHelix-Song-5.mp3` },
+    { id: 'hype_jersey',  name: 'Jersey Club',  emoji: '💃', bpm: 150, url: `${BASE}/SoundHelix-Song-6.mp3` },
   ],
   CHILL: [
-    { id: 'chill_lofi',    name: 'Lo-Fi Dreams',  emoji: '🎵', bpm: 90  },
-    { id: 'chill_wave',    name: 'Chillwave',      emoji: '🌊', bpm: 100 },
-    { id: 'chill_jazz',    name: 'Smooth Jazz',    emoji: '🎷', bpm: 85  },
-    { id: 'chill_ambient', name: 'Ambient Flow',   emoji: '🌙', bpm: 75  },
-    { id: 'chill_rnb',     name: 'R&B Groove',     emoji: '🎤', bpm: 95  },
-    { id: 'chill_synth',   name: 'Synth Pop',      emoji: '🎹', bpm: 105 },
+    { id: 'chill_lofi',    name: 'Lo-Fi Dreams',  emoji: '🎵', bpm: 90,  url: `${BASE}/SoundHelix-Song-7.mp3` },
+    { id: 'chill_wave',    name: 'Chillwave',      emoji: '🌊', bpm: 100, url: `${BASE}/SoundHelix-Song-8.mp3` },
+    { id: 'chill_jazz',    name: 'Smooth Jazz',    emoji: '🎷', bpm: 85,  url: `${BASE}/SoundHelix-Song-9.mp3` },
+    { id: 'chill_ambient', name: 'Ambient Flow',   emoji: '🌙', bpm: 75,  url: `${BASE}/SoundHelix-Song-10.mp3` },
+    { id: 'chill_rnb',     name: 'R&B Groove',     emoji: '🎤', bpm: 95,  url: `${BASE}/SoundHelix-Song-11.mp3` },
+    { id: 'chill_synth',   name: 'Synth Pop',      emoji: '🎹', bpm: 105, url: `${BASE}/SoundHelix-Song-12.mp3` },
   ],
   EPIC: [
-    { id: 'epic_rock',      name: 'Epic Rock',       emoji: '🎸', bpm: 140 },
-    { id: 'epic_orchestra', name: 'Orkestra Yükseliş',emoji: '🎻', bpm: 120 },
-    { id: 'epic_hybrid',    name: 'Hybrid Trailer',  emoji: '🎬', bpm: 130 },
-    { id: 'epic_anthem',    name: 'Stadyum Marşı',   emoji: '🏟️', bpm: 128 },
-    { id: 'epic_metal',     name: 'Metal Fırtınası', emoji: '🤘', bpm: 165 },
-    { id: 'epic_cinematic', name: 'Sinematik Dalga', emoji: '🌅', bpm: 115 },
+    { id: 'epic_rock',      name: 'Epic Rock',        emoji: '🎸', bpm: 140, url: `${BASE}/SoundHelix-Song-13.mp3` },
+    { id: 'epic_orchestra', name: 'Orkestra Yükseliş', emoji: '🎻', bpm: 120, url: `${BASE}/SoundHelix-Song-14.mp3` },
+    { id: 'epic_hybrid',    name: 'Hybrid Trailer',   emoji: '🎬', bpm: 130, url: `${BASE}/SoundHelix-Song-15.mp3` },
+    { id: 'epic_anthem',    name: 'Stadyum Marşı',    emoji: '🏟️', bpm: 128, url: `${BASE}/SoundHelix-Song-16.mp3` },
+    { id: 'epic_metal',     name: 'Metal Fırtınası',  emoji: '🤘', bpm: 165, url: `${BASE}/SoundHelix-Song-17.mp3` },
+    { id: 'epic_cinematic', name: 'Sinematik Dalga',  emoji: '🌅', bpm: 115, url: `${BASE}/SoundHelix-Song-1.mp3` },
   ],
   DRAMATIC: [
-    { id: 'drama_tension',  name: 'Gerilim',        emoji: '😰', bpm: 80 },
-    { id: 'drama_dark',     name: 'Karanlık Drama',  emoji: '🌑', bpm: 70 },
-    { id: 'drama_piano',    name: 'Solo Piyano',     emoji: '🎹', bpm: 65 },
-    { id: 'drama_strings',  name: 'Yaylı Dörtlüsü', emoji: '🎻', bpm: 75 },
-    { id: 'drama_bass',     name: 'Bass Patlaması',  emoji: '🔊', bpm: 85 },
-    { id: 'drama_suspense', name: 'Gerilim Döngüsü', emoji: '😱', bpm: 90 },
+    { id: 'drama_tension',  name: 'Gerilim',         emoji: '😰', bpm: 80, url: `${BASE}/SoundHelix-Song-2.mp3` },
+    { id: 'drama_dark',     name: 'Karanlık Drama',   emoji: '🌑', bpm: 70, url: `${BASE}/SoundHelix-Song-3.mp3` },
+    { id: 'drama_piano',    name: 'Solo Piyano',      emoji: '🎹', bpm: 65, url: `${BASE}/SoundHelix-Song-7.mp3` },
+    { id: 'drama_strings',  name: 'Yaylı Dörtlüsü',  emoji: '🎻', bpm: 75, url: `${BASE}/SoundHelix-Song-8.mp3` },
+    { id: 'drama_bass',     name: 'Bass Patlaması',   emoji: '🔊', bpm: 85, url: `${BASE}/SoundHelix-Song-5.mp3` },
+    { id: 'drama_suspense', name: 'Gerilim Döngüsü',  emoji: '😱', bpm: 90, url: `${BASE}/SoundHelix-Song-6.mp3` },
   ],
   FUNNY: [
-    { id: 'funny_circus',  name: 'Sirk Teması',    emoji: '🎪', bpm: 120 },
-    { id: 'funny_cartoon', name: 'Karikatür Koşu', emoji: '🐭', bpm: 140 },
-    { id: 'funny_ska',     name: 'Ska Partisi',    emoji: '🎺', bpm: 160 },
-    { id: 'funny_polka',   name: 'Parti Polkası',  emoji: '🥳', bpm: 130 },
-    { id: 'funny_8bit',    name: '8-Bit Eğlence',  emoji: '👾', bpm: 110 },
-    { id: 'funny_quirky',  name: 'Tuhaf Yürüyüş',  emoji: '🦆', bpm: 100 },
+    { id: 'funny_circus',  name: 'Sirk Teması',     emoji: '🎪', bpm: 120, url: `${BASE}/SoundHelix-Song-4.mp3` },
+    { id: 'funny_cartoon', name: 'Karikatür Koşu',  emoji: '🐭', bpm: 140, url: `${BASE}/SoundHelix-Song-9.mp3` },
+    { id: 'funny_ska',     name: 'Ska Partisi',     emoji: '🎺', bpm: 160, url: `${BASE}/SoundHelix-Song-10.mp3` },
+    { id: 'funny_polka',   name: 'Parti Polkası',   emoji: '🥳', bpm: 130, url: `${BASE}/SoundHelix-Song-11.mp3` },
+    { id: 'funny_8bit',    name: '8-Bit Eğlence',   emoji: '👾', bpm: 110, url: `${BASE}/SoundHelix-Song-12.mp3` },
+    { id: 'funny_quirky',  name: 'Tuhaf Yürüyüş',   emoji: '🦆', bpm: 100, url: `${BASE}/SoundHelix-Song-13.mp3` },
   ],
 }
 
@@ -67,23 +72,39 @@ export default function MusicSelection() {
   const [rendering, setRendering] = useState(false)
   const audioRef = useRef(null)
 
-  function handlePreview(trackId) {
-    if (previewId === trackId) {
-      setPreviewId(null)
-      if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
-      return
+  function stopPreview() {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
     }
-    setPreviewId(trackId)
-    // Try to play from the music directory; falls back silently if unavailable
-    const audio = new Audio(`/assets/music/${trackId}.mp3`)
+    setPreviewId(null)
+  }
+
+  function handlePreview(track) {
+    // Toggle off
+    if (previewId === track.id) { stopPreview(); return }
+
+    stopPreview()
+    setPreviewId(track.id)
+
+    const audio = new Audio(track.url)
     audio.volume = 0.6
     audio.play().catch(() => {})
     audioRef.current = audio
-    setTimeout(() => {
+
+    // Stop after 5 s
+    const timer = setTimeout(() => {
       audio.pause()
       setPreviewId(null)
     }, 5000)
+
+    // Also stop when audio ends naturally (short files)
+    audio.onended = () => { clearTimeout(timer); setPreviewId(null) }
   }
+
+  // Flatten all tracks to a map: id → track (for URL lookup at render time)
+  const allTracks = Object.values(MUSIC_LIBRARY).flat()
+  const trackById = Object.fromEntries(allTracks.map((t) => [t.id, t]))
 
   async function handleRender() {
     if (!selectedMusic || rendering) return
@@ -95,6 +116,8 @@ export default function MusicSelection() {
     const newUsed = [...new Set([...existing, ...selectedPhotos.map((p) => p.url)])]
     localStorage.setItem(key, JSON.stringify(newUsed))
 
+    const musicUrl = trackById[selectedMusic]?.url || null
+
     try {
       const { data } = await axios.post('/api/render', {
         photos: selectedPhotos.map((p) => ({
@@ -102,7 +125,8 @@ export default function MusicSelection() {
           effect: photoEffects[p.url] || 'ken_burns',
           duration: photoDurations[p.url] || 2.5,
         })),
-        music: selectedMusic,
+        music:    selectedMusic,
+        musicUrl: musicUrl,
       })
       setJobId(data.jobId)
       navigate('/rendering')
@@ -157,7 +181,7 @@ export default function MusicSelection() {
       {/* Track list */}
       <div className="flex-1 px-4 pb-36 overflow-y-auto no-scrollbar mt-3 flex flex-col gap-2">
         {(MUSIC_LIBRARY[activeMood] || []).map((track) => {
-          const selected = selectedMusic === track.id
+          const selected   = selectedMusic === track.id
           const previewing = previewId === track.id
           return (
             <div
@@ -185,7 +209,7 @@ export default function MusicSelection() {
               </div>
               {/* Preview button */}
               <button
-                onClick={(e) => { e.stopPropagation(); handlePreview(track.id) }}
+                onClick={(e) => { e.stopPropagation(); handlePreview(track) }}
                 className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-all active:scale-90"
                 style={previewing
                   ? { background: moodColor, color: '#080818' }

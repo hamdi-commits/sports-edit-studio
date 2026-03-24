@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import axios from 'axios'
 import useAppStore from '../store/useAppStore.js'
 
 export default function VideoPreview() {
@@ -8,6 +9,8 @@ export default function VideoPreview() {
   const [copied, setCopied] = useState(false)
   const [toast, setToast] = useState('')
   const [saving, setSaving] = useState(false)
+  const [hashtags, setHashtags] = useState([])
+  const [tagsLoading, setTagsLoading] = useState(false)
 
   if (!videoUrl) {
     navigate('/')
@@ -20,7 +23,27 @@ export default function VideoPreview() {
   const safeSlug = safeAthlete.replace(/\s+/g, '_').toLowerCase()
   const filename = `${safeSlug}-edit-${today}.mp4`
   const suggestedTitle = `${safeAthlete} - Epic Sports Edit 🔥 | ${year}`
-  const suggestedTags = `#${safeAthlete.replace(/\s+/g, '')} #SportsEdit #Highlights #Football #Sports #Edit`
+
+  // Fetch AI-generated hashtags on mount
+  useEffect(() => {
+    setTagsLoading(true)
+    axios.post('/api/hashtags', { athleteName: safeAthlete })
+      .then(({ data }) => {
+        if (data.hashtags?.length) setHashtags(data.hashtags)
+      })
+      .catch(() => {
+        // Fallback tags if API fails
+        const name = safeAthlete.replace(/\s+/g, '')
+        setHashtags([
+          `#${name}`, '#SportsEdit', '#Highlights',
+          '#Football', '#Sports', '#Edit',
+          '#Shorts', '#YouTube', '#ViralVideo', '#Goals',
+        ])
+      })
+      .finally(() => setTagsLoading(false))
+  }, [])
+
+  const tagsString = hashtags.join(' ')
 
   function showToast(msg) {
     setToast(msg)
@@ -76,12 +99,11 @@ export default function VideoPreview() {
   }
 
   function handleCopyText() {
-    const text = `${suggestedTitle}\n\n${suggestedTags}`
+    const text = `${suggestedTitle}\n\n${tagsString}`
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     }).catch(() => {
-      // Fallback
       const el = document.createElement('textarea')
       el.value = text
       document.body.appendChild(el)
@@ -198,10 +220,22 @@ export default function VideoPreview() {
             </button>
           </div>
           <p className="text-sm font-bold text-white mb-2">{suggestedTitle}</p>
-          <p className="text-xs font-semibold" style={{ color: 'rgba(255,255,255,0.4)',
-                                                         wordBreak: 'break-all' }}>
-            {suggestedTags}
-          </p>
+          {tagsLoading ? (
+            <p className="text-xs font-semibold animate-pulse" style={{ color: 'rgba(255,255,255,0.3)' }}>
+              🤖 Etiketler oluşturuluyor...
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              {hashtags.map((tag) => (
+                <span key={tag}
+                      className="text-xs font-bold px-2 py-0.5 rounded-full"
+                      style={{ background: 'rgba(255,215,0,0.1)', color: '#ffd700',
+                               border: '1px solid rgba(255,215,0,0.2)' }}>
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Make another */}
