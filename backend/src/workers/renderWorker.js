@@ -95,9 +95,9 @@ function buildKenBurnsFilter(imageCount) {
     const pan = panVariants[i % panVariants.length]
     parts.push(
       `[${i}:v]` +
-      `scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,` +
+      `scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,` +
       `zoompan=z='min(zoom+0.002,1.3)':${pan}:d=${frames}:s=1080x1920:fps=${fps},` +
-      `setpts=PTS-STARTPTS` +
+      `setsar=1,setpts=PTS-STARTPTS` +
       `[v${i}]`
     )
   }
@@ -120,11 +120,11 @@ function buildZoomBurstFilter(imageCount) {
   for (let i = 0; i < imageCount; i++) {
     parts.push(
       `[${i}:v]` +
-      `scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,` +
+      `scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,` +
       `zoompan=z='if(lte(on,${burstFrames}),1+0.5*(on/${burstFrames}),1.5)':` +
       `x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':` +
       `d=${totalFrames}:s=1080x1920:fps=${fps},` +
-      `setpts=PTS-STARTPTS` +
+      `setsar=1,setpts=PTS-STARTPTS` +
       `[v${i}]`
     )
   }
@@ -153,13 +153,13 @@ function buildFlashCutFilter(imageCount) {
   for (let i = 0; i < imageCount; i++) {
     parts.push(
       `[${i}:v]` +
-      `scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,` +
+      `scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,` +
       // loop the still image forever, then trim to clip length
       `loop=loop=-1:size=1:start=0,` +
       `trim=duration=${clipDuration},` +
       `fps=fps=${fps},` +
       `fade=t=in:st=0:d=${flashDuration}:color=white,` +
-      `setpts=PTS-STARTPTS` +
+      `setsar=1,setpts=PTS-STARTPTS` +
       `[v${i}]`
     )
   }
