@@ -56,7 +56,13 @@ if (!existsSync(SILENT_AUDIO_PATH)) {
 const toFfmpegPath = (p) => p.replace(/\\/g, '/')
 
 async function downloadImage(url, destPath) {
-  const resp = await axios.get(url, { responseType: 'stream', timeout: 15000 })
+  const resp = await axios.get(url, {
+    responseType: 'stream',
+    timeout: 15000,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    },
+  })
   await pipeline(resp.data, createWriteStream(destPath))
 }
 
@@ -193,21 +199,33 @@ async function renderVideo(job) {
 
   await job.updateProgress(5)
 
-  // 1. Download images in parallel (max 4 at a time)
-  const imagePaths = Array.from({ length: photos.length }, (_, i) =>
+  // 1. Download images in parallel (max 4 at a time), skipping any that fail (e.g. 403)
+  const allPaths = Array.from({ length: photos.length }, (_, i) =>
     join(jobTmpDir, `img_${i}.jpg`)
   )
 
   const CHUNK = 4
+  const successPaths = []
   for (let start = 0; start < photos.length; start += CHUNK) {
-    await Promise.all(
-      photos.slice(start, start + CHUNK).map((url, j) =>
-        downloadImage(url, imagePaths[start + j])
-      )
+    const chunk = photos.slice(start, start + CHUNK)
+    const results = await Promise.allSettled(
+      chunk.map((url, j) => downloadImage(url, allPaths[start + j]))
     )
+    for (let j = 0; j < chunk.length; j++) {
+      if (results[j].status === 'fulfilled') {
+        successPaths.push(allPaths[start + j])
+      } else {
+        const status = results[j].reason?.response?.status
+        console.warn(`[render] Skipping image ${start + j} (${chunk[j]}): ${status ?? results[j].reason?.message}`)
+      }
+    }
     await job.updateProgress(5 + Math.round(((start + CHUNK) / photos.length) * 35))
   }
 
+  if (successPaths.length === 0) throw new Error('All image downloads failed — no images to render')
+  console.log(`[render] Downloaded ${successPaths.length}/${photos.length} images successfully`)
+
+  const imagePaths = successPaths
   await job.updateProgress(40)
 
   // 2. Build render params
