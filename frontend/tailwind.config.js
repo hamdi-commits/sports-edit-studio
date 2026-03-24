@@ -4,17 +4,17 @@ export default {
   theme: {
     extend: {
       colors: {
-        brand: {
-          purple: '#7c3aed',
-          pink:   '#ec4899',
-          yellow: '#fbbf24',
-          cyan:   '#06b6d4',
-          dark:   '#0f0f1a',
-        }
+        bg:        '#080818',
+        card:      '#0f0f28',
+        card2:     '#161640',
+        primary:   '#00ff87',
+        secondary: '#00c8ff',
+        accent:    '#ff3366',
+        gold:      '#ffd700',
       },
       fontFamily: {
-        display: ['system-ui', 'sans-serif']
-      }
+        sans: ['Nunito', 'system-ui', 'sans-serif'],
+      },
     }
   },
   plugins: []

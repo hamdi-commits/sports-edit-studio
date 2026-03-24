@@ -1,18 +1,25 @@
 import { renderQueue } from '../lib/queue.js'
 
-// In-memory job map for Phase 1 (avoids needing a DB for status)
 const jobMap = new Map()
 
 export default async function renderRoute(app) {
-  // POST /api/render  — submit a new render job
+  // POST /api/render — submit a new render job
+  // Accepts both legacy format (photos: string[], effect: string) and
+  // new per-photo format (photos: {url, effect, duration}[])
   app.post('/api/render', {
     schema: {
       body: {
         type: 'object',
-        required: ['photos', 'effect', 'music'],
+        required: ['photos', 'music'],
+        additionalProperties: true,
         properties: {
-          photos: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 20 },
-          effect: { type: 'string', enum: ['ken_burns', 'zoom_burst', 'flash_cut'] },
+          photos: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 20,
+            items: {},   // Accept both strings and objects — validated in handler
+          },
+          effect: { type: 'string' },   // optional global fallback (legacy)
           music:  { type: 'string' },
         },
       },

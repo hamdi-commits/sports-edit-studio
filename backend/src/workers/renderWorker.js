@@ -3,10 +3,8 @@
  *
  * Each job: download images → apply FFmpeg effect → mux with music → save MP4
  *
- * Effects (all output 1080×1920 @ 30 fps H.264/AAC):
- *   ken_burns  — slow pan+zoom via zoompan filter (3 s/clip)
- *   zoom_burst — fast punch zoom via zoompan (2 s/clip)
- *   flash_cut  — loop+trim with white fade-in flash (1.5 s/clip)
+ * Supports per-photo effects (new format) and legacy single-effect format.
+ * All clips output 1080×1920 @ 30 fps H.264/AAC.
  */
 
 import 'dotenv/config'
@@ -74,111 +72,168 @@ function buildServerVideoUrl(filename) {
 // ─── FFmpeg effect filter builders ───────────────────────────────────────────
 
 /**
- * Ken Burns — slow zoom+pan using zoompan filter.
- * zoompan handles looping still images internally.
- * 3 clips × 3 s = 9 s for 3 photos.
+ * Build an FFmpeg filter chain for a single clip.
+ * @param {number} index   - ffmpeg input index (0-based)
+ * @param {string} effect  - effect id
+ * @param {number} dur     - clip duration in seconds
+ * @returns {string}       - filter string producing [v{index}]
  */
-function buildKenBurnsFilter(imageCount) {
+function buildSingleClipFilter(index, effect, dur) {
   const fps = 30
-  const clipDuration = 3
-  const frames = fps * clipDuration
+  const frames = Math.max(1, Math.round(dur * fps))
+  const base = `[${index}:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1`
+  const loop = `loop=loop=-1:size=1:start=0,trim=duration=${dur},fps=fps=${fps}`
+  const tail = `setsar=1,setpts=PTS-STARTPTS[v${index}]`
 
-  // Three pan destinations cycling across clips
-  const panVariants = [
-    `x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`,   // center zoom
-    `x='0':y='0'`,                                    // top-left corner
-    `x='iw-(iw/zoom)':y='ih-(ih/zoom)'`,             // bottom-right corner
-  ]
+  switch (effect) {
+    case 'zoom_out':
+      return (
+        `${base},fps=${fps},` +
+        `zoompan=z='if(eq(on,1),1.3,max(zoom-0.003,1.0))':` +
+        `x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frames}:s=1080x1920:fps=${fps},` +
+        `${tail}`
+      )
 
-  const parts = []
-  for (let i = 0; i < imageCount; i++) {
-    const pan = panVariants[i % panVariants.length]
-    parts.push(
-      `[${i}:v]` +
-      `scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,` +
-      `zoompan=z='min(zoom+0.002,1.3)':${pan}:d=${frames}:s=1080x1920:fps=${fps},` +
-      `setsar=1,setpts=PTS-STARTPTS` +
-      `[v${i}]`
-    )
+    case 'zoom_burst': {
+      const burst = Math.round(fps * 0.5)
+      return (
+        `${base},fps=${fps},` +
+        `zoompan=z='if(lte(on,${burst}),1+0.5*(on/${burst}),1.5)':` +
+        `x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frames}:s=1080x1920:fps=${fps},` +
+        `${tail}`
+      )
+    }
+
+    case 'slide_right':
+      return (
+        `${base},fps=${fps},` +
+        `zoompan=z='1.1':x='(iw-iw/zoom)*(1-on/${frames})':y='(ih-ih/zoom)/2':` +
+        `d=${frames}:s=1080x1920:fps=${fps},` +
+        `${tail}`
+      )
+
+    case 'slide_left':
+      return (
+        `${base},fps=${fps},` +
+        `zoompan=z='1.1':x='(iw-iw/zoom)*on/${frames}':y='(ih-ih/zoom)/2':` +
+        `d=${frames}:s=1080x1920:fps=${fps},` +
+        `${tail}`
+      )
+
+    case 'slide_up':
+      return (
+        `${base},fps=${fps},` +
+        `zoompan=z='1.1':x='(iw-iw/zoom)/2':y='(ih-ih/zoom)*(1-on/${frames})':` +
+        `d=${frames}:s=1080x1920:fps=${fps},` +
+        `${tail}`
+      )
+
+    case 'pan_horizontal':
+      return (
+        `${base},fps=${fps},` +
+        `zoompan=z='1.15':x='(iw-iw/zoom)*on/${frames}':y='(ih-ih/zoom)/2':` +
+        `d=${frames}:s=1080x1920:fps=${fps},` +
+        `${tail}`
+      )
+
+    case 'rotate_zoom':
+      return (
+        `${base},fps=${fps},` +
+        `zoompan=z='min(zoom+0.002,1.3)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':` +
+        `d=${frames}:s=1080x1920:fps=${fps},` +
+        `rotate=angle=0.05:expand=0:fillcolor=black,` +
+        `${tail}`
+      )
+
+    case 'fade': {
+      const fd = Math.min(0.5, dur / 4).toFixed(3)
+      const foStart = (dur - parseFloat(fd)).toFixed(3)
+      return (
+        `${base},${loop},` +
+        `fade=t=in:st=0:d=${fd},fade=t=out:st=${foStart}:d=${fd},` +
+        `${tail}`
+      )
+    }
+
+    case 'glitch':
+      return (
+        `${base},${loop},` +
+        `hue=h='if(lt(mod(t,0.15),0.07),25,-25)':s=1.8,` +
+        `${tail}`
+      )
+
+    case 'color_shift':
+      return (
+        `${base},${loop},` +
+        `hue=h='t*60':s=1.4,` +
+        `${tail}`
+      )
+
+    case 'vhs':
+      return (
+        `${base},${loop},` +
+        `unsharp=3:3:0.5:3:3:0,hue=s=0.45,eq=contrast=1.1,` +
+        `${tail}`
+      )
+
+    case 'sparkle': {
+      const sf = Math.min(0.4, dur / 6).toFixed(3)
+      return (
+        `${base},${loop},` +
+        `eq=brightness=0.15:saturation=2.0,fade=t=in:st=0:d=${sf},` +
+        `${tail}`
+      )
+    }
+
+    case 'burn_wipe': {
+      const bf = Math.min(0.4, dur / 4).toFixed(3)
+      return (
+        `${base},${loop},` +
+        `fade=t=in:st=0:d=${bf}:color=0xff6600,` +
+        `${tail}`
+      )
+    }
+
+    case 'freeze_frame':
+      return (
+        `${base},${loop},` +
+        `${tail}`
+      )
+
+    case 'flash_cut': {
+      const ff = (4 / fps).toFixed(3)
+      return (
+        `${base},${loop},` +
+        `fade=t=in:st=0:d=${ff}:color=white,` +
+        `${tail}`
+      )
+    }
+
+    case 'ken_burns':
+    default:
+      return (
+        `${base},fps=${fps},` +
+        `zoompan=z='min(zoom+0.002,1.3)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':` +
+        `d=${frames}:s=1080x1920:fps=${fps},` +
+        `${tail}`
+      )
   }
-
-  const concat = Array.from({ length: imageCount }, (_, i) => `[v${i}]`).join('')
-  return [...parts, `${concat}concat=n=${imageCount}:v=1:a=0[outv]`].join(';')
 }
 
 /**
- * Zoom Burst — zoompan with fast initial zoom from 1.0→1.5 over 0.5 s.
- * 2 s/clip total.
+ * Build a complete filter graph for a list of per-photo items.
+ * @param {{effect: string, duration: number}[]} items - one per successfully-downloaded image
+ * @returns {string} complete filtergraph string
  */
-function buildZoomBurstFilter(imageCount) {
-  const fps = 30
-  const clipDuration = 2
-  const totalFrames = fps * clipDuration
-  const burstFrames = fps * 0.5  // 15 frames
-
-  const parts = []
-  for (let i = 0; i < imageCount; i++) {
-    parts.push(
-      `[${i}:v]` +
-      `scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,` +
-      `zoompan=z='if(lte(on,${burstFrames}),1+0.5*(on/${burstFrames}),1.5)':` +
-      `x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':` +
-      `d=${totalFrames}:s=1080x1920:fps=${fps},` +
-      `setsar=1,setpts=PTS-STARTPTS` +
-      `[v${i}]`
-    )
-  }
-
-  const concat = Array.from({ length: imageCount }, (_, i) => `[v${i}]`).join('')
-  return [...parts, `${concat}concat=n=${imageCount}:v=1:a=0[outv]`].join(';')
+function buildPerPhotoFilterGraph(items) {
+  const parts = items.map((item, i) =>
+    buildSingleClipFilter(i, item.effect, item.duration)
+  )
+  const inputs = items.map((_, i) => `[v${i}]`).join('')
+  parts.push(`${inputs}concat=n=${items.length}:v=1:a=0[outv]`)
+  return parts.join(';')
 }
 
-/**
- * Flash Cut — hard cuts with a white flash at the start of each clip.
- *
- * Still images have no native duration, so we use:
- *   loop=loop=-1:size=1  → loops the single frame indefinitely
- *   trim=duration=X      → limits to clip length
- *   fps=fps=30           → forces output frame rate
- *   fade=in white        → white flash for first 4 frames
- *
- * 1.5 s/clip.
- */
-function buildFlashCutFilter(imageCount) {
-  const fps = 30
-  const clipDuration = 1.5
-  const flashDuration = 4 / fps  // 4 frames ≈ 0.133 s
-
-  const parts = []
-  for (let i = 0; i < imageCount; i++) {
-    parts.push(
-      `[${i}:v]` +
-      `scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,` +
-      // loop the still image forever, then trim to clip length
-      `loop=loop=-1:size=1:start=0,` +
-      `trim=duration=${clipDuration},` +
-      `fps=fps=${fps},` +
-      `fade=t=in:st=0:d=${flashDuration}:color=white,` +
-      `setsar=1,setpts=PTS-STARTPTS` +
-      `[v${i}]`
-    )
-  }
-
-  const concat = Array.from({ length: imageCount }, (_, i) => `[v${i}]`).join('')
-  return [...parts, `${concat}concat=n=${imageCount}:v=1:a=0[outv]`].join(';')
-}
-
-function getFilterBuilder(effect) {
-  if (effect === 'zoom_burst') return buildZoomBurstFilter
-  if (effect === 'flash_cut')  return buildFlashCutFilter
-  return buildKenBurnsFilter
-}
-
-function getClipDuration(effect) {
-  if (effect === 'zoom_burst') return 2
-  if (effect === 'flash_cut')  return 1.5
-  return 3  // ken_burns
-}
 
 // ─── Music ───────────────────────────────────────────────────────────────────
 
@@ -193,44 +248,48 @@ function getMusicPath(musicId) {
 // ─── Core render ─────────────────────────────────────────────────────────────
 
 async function renderVideo(job) {
-  const { photos, effect, music } = job.data
+  const { photos, effect: globalEffect, music } = job.data
   const jobTmpDir = join(TMP_DIR, job.id)
   mkdirSync(jobTmpDir, { recursive: true })
 
   await job.updateProgress(5)
 
-  // 1. Download images in parallel (max 4 at a time), skipping any that fail (e.g. 403)
-  const allPaths = Array.from({ length: photos.length }, (_, i) =>
-    join(jobTmpDir, `img_${i}.jpg`)
+  // Normalise photos to [{url, effect, duration}] regardless of input format
+  const photoItems = photos.map((p) =>
+    typeof p === 'string'
+      ? { url: p, effect: globalEffect || 'ken_burns', duration: 2.5 }
+      : { url: p.url || p, effect: p.effect || globalEffect || 'ken_burns', duration: p.duration || 2.5 }
   )
 
+  // 1. Download images in parallel (max 4 at a time), skipping any that fail (e.g. 403)
+  const allPaths = photoItems.map((_, i) => join(jobTmpDir, `img_${i}.jpg`))
+
   const CHUNK = 4
-  const successPaths = []
-  for (let start = 0; start < photos.length; start += CHUNK) {
-    const chunk = photos.slice(start, start + CHUNK)
+  const successItems = []
+  for (let start = 0; start < photoItems.length; start += CHUNK) {
+    const chunk = photoItems.slice(start, start + CHUNK)
     const results = await Promise.allSettled(
-      chunk.map((url, j) => downloadImage(url, allPaths[start + j]))
+      chunk.map((item, j) => downloadImage(item.url, allPaths[start + j]))
     )
     for (let j = 0; j < chunk.length; j++) {
       if (results[j].status === 'fulfilled') {
-        successPaths.push(allPaths[start + j])
+        successItems.push({ path: allPaths[start + j], effect: chunk[j].effect, duration: chunk[j].duration })
       } else {
         const status = results[j].reason?.response?.status
-        console.warn(`[render] Skipping image ${start + j} (${chunk[j]}): ${status ?? results[j].reason?.message}`)
+        console.warn(`[render] Skipping image ${start + j} (${chunk[j].url}): ${status ?? results[j].reason?.message}`)
       }
     }
-    await job.updateProgress(5 + Math.round(((start + CHUNK) / photos.length) * 35))
+    await job.updateProgress(5 + Math.round(((start + CHUNK) / photoItems.length) * 35))
   }
 
-  if (successPaths.length === 0) throw new Error('All image downloads failed — no images to render')
-  console.log(`[render] Downloaded ${successPaths.length}/${photos.length} images successfully`)
+  if (successItems.length === 0) throw new Error('All image downloads failed — no images to render')
+  console.log(`[render] Downloaded ${successItems.length}/${photoItems.length} images successfully`)
 
-  const imagePaths = successPaths
   await job.updateProgress(40)
 
   // 2. Build render params
-  const filterGraph   = getFilterBuilder(effect)(imagePaths.length)
-  const totalDuration = imagePaths.length * getClipDuration(effect)
+  const filterGraph   = buildPerPhotoFilterGraph(successItems)
+  const totalDuration = successItems.reduce((s, item) => s + item.duration, 0)
   const musicPath     = getMusicPath(music)
   const outputFilename = `${uuidv4()}.mp4`
   const outputPath     = join(UPLOADS_DIR, outputFilename)
@@ -242,8 +301,8 @@ async function renderVideo(job) {
     let cmd = ffmpeg()
 
     // Image inputs (still JPEGs — effects handle looping/duration)
-    for (const imgPath of imagePaths) {
-      cmd = cmd.input(toFfmpegPath(imgPath))
+    for (const item of successItems) {
+      cmd = cmd.input(toFfmpegPath(item.path))
     }
 
     // Audio: real MP3 or pre-generated silent MP3 fallback
@@ -254,7 +313,7 @@ async function renderVideo(job) {
       console.warn('No audio source available, video will be muted')
     }
 
-    const audioIdx = imagePaths.length  // audio is the last input
+    const audioIdx = successItems.length  // audio is the last input
 
     const filters = [filterGraph]
     const outputOpts = [

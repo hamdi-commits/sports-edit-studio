@@ -11,34 +11,66 @@ export default function Home() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen px-6 text-center gap-8">
+    <div className="flex flex-col items-center justify-center min-h-screen px-6 text-center gap-10"
+         style={{ background: 'radial-gradient(ellipse at top, #0d0d30 0%, #080818 70%)' }}>
+
       {/* Animated logo */}
-      <div className="relative">
-        <div className="absolute inset-0 rounded-full bg-brand-purple opacity-30 animate-pulse-ring" />
-        <div className="relative w-32 h-32 rounded-full bg-gradient-to-br from-brand-purple to-brand-pink flex items-center justify-center shadow-2xl">
-          <span className="text-6xl">🏆</span>
+      <div className="relative flex items-center justify-center">
+        <div className="absolute w-44 h-44 rounded-full animate-pulse-ring"
+             style={{ background: 'rgba(0,255,135,0.15)' }} />
+        <div className="absolute w-36 h-36 rounded-full animate-pulse-ring"
+             style={{ background: 'rgba(0,200,255,0.1)', animationDelay: '0.4s' }} />
+        <div className="relative w-28 h-28 rounded-full flex items-center justify-center animate-float"
+             style={{ background: 'linear-gradient(135deg, #0f0f28 0%, #161640 100%)',
+                      border: '2px solid rgba(0,255,135,0.4)',
+                      boxShadow: '0 0 40px rgba(0,255,135,0.3), inset 0 0 20px rgba(0,255,135,0.05)' }}>
+          <span className="text-5xl">🏆</span>
         </div>
       </div>
 
+      {/* Title */}
       <div>
-        <h1 className="text-4xl font-black tracking-tight text-white leading-tight">
-          Sports Edit<br />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-yellow to-brand-pink">
-            Studio
-          </span>
+        <p className="text-xs font-bold tracking-widest mb-2" style={{ color: '#00ff87' }}>
+          ✦ PROFESYONEL ✦
+        </p>
+        <h1 className="text-5xl font-black tracking-tight text-white leading-tight">
+          Sports Edit
         </h1>
-        <p className="mt-3 text-lg text-gray-400">Make epic highlight videos!</p>
+        <h2 className="text-5xl font-black leading-tight"
+            style={{ background: 'linear-gradient(90deg, #00ff87, #00c8ff)',
+                     WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+          Studio
+        </h2>
+        <p className="mt-4 text-base font-semibold" style={{ color: 'rgba(255,255,255,0.5)' }}>
+          Efsane spor videoları oluştur 🎬
+        </p>
       </div>
 
+      {/* Feature chips */}
+      <div className="flex flex-wrap justify-center gap-2">
+        {['16 Efekt', '30 Müzik', 'Kişisel Süre', '1080×1920'].map((f) => (
+          <span key={f} className="px-3 py-1 rounded-full text-xs font-bold"
+                style={{ background: 'rgba(0,255,135,0.1)', border: '1px solid rgba(0,255,135,0.3)',
+                         color: '#00ff87' }}>
+            {f}
+          </span>
+        ))}
+      </div>
+
+      {/* CTA */}
       <button
         onClick={handleStart}
-        className="w-full py-5 rounded-3xl text-2xl font-black bg-gradient-to-r from-brand-purple to-brand-pink
-                   shadow-lg shadow-purple-900/50 active:scale-95 transition-transform"
+        className="w-full py-5 rounded-2xl text-xl font-black active:scale-95 transition-transform"
+        style={{ background: 'linear-gradient(135deg, #00ff87, #00c8ff)',
+                 color: '#080818',
+                 boxShadow: '0 0 30px rgba(0,255,135,0.5)' }}
       >
-        🎬 Create Video
+        🎬 Video Oluştur
       </button>
 
-      <p className="text-xs text-gray-600">Made for Can ⚽</p>
+      <p className="text-xs font-semibold" style={{ color: 'rgba(255,255,255,0.25)' }}>
+        Can için yapıldı ⚽
+      </p>
     </div>
   )
 }
